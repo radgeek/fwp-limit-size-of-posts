@@ -23,6 +23,20 @@ class FWPLimitSizeOfPosts {
 		endif;
 
 		add_filter(
+		/*hook=*/ 'the_content',
+		/*function=*/ array($this, 'the_content'),
+		/*priority=*/ 10010,
+		/*arguments=*/ 1
+		);
+
+		add_filter(
+		/*hook=*/ 'the_content_rss',
+		/*function=*/ array($this, 'the_content'),
+		/*priority=*/ 10010,
+		/*arguments=*/ 1
+		);
+
+		add_filter(
 		/*hook=*/ 'syndicated_item_content',
 		/*function=*/ array($this, 'syndicated_item_content'),
 		/*priority=*/ 10010,
@@ -262,8 +276,42 @@ class FWPLimitSizeOfPosts {
 		return $text;
 	} /* FWPLimitSizeOfPosts::filter() */
 
+	public function the_content ($content) {
+		global $post;
+
+		if (is_object($post)) :
+			$oPost = new FeedWordPressLocalPost($post);
+			if ($oPost->is_syndicated()) :
+				$link = $oPost->feed();
+
+				if ('syndicated_item_content'==$link->setting($this->name.' apply size limits', $this->name.'_apply_size_limits')) :
+					return $content;
+				endif;
+				
+				$rule = $link->setting('limit size of posts', $this->name.'_limit_size_of_posts', NULL);
+				// Rules are stored in the format array('metric' => $count, 'metric' => $count);
+				// 'metric' is the metric to be limited (characters|words)
+				// $count is a numeric value indicating the maximum to limit it to
+				// NULL indicates that no limiting rules have been stored.
+		
+				if (is_string($rule)) : $rule = unserialize($rule); endif;
+
+				$haveRule = is_array($rule);
+				if ($haveRule) :
+					$rule['post'] = $post;
+					$content = $this->filter($content, $rule);
+				endif;
+			endif;
+		endif;
+		return $content;
+	} /* FWPLimitSizeOfPosts::the_content () */
+
 	public function syndicated_item_content ($content, $post) {
 		$link = $post->link;
+
+		if ('syndicated_item_content'!=$link->setting($this->name.' apply size limits', $this->name.'_apply_size_limits')) :
+			return $content;
+		endif;
 
 		$rule = $link->setting('limit size of posts', $this->name.'_limit_size_of_posts', NULL);
 		// Rules are stored in the format array('metric' => $count, 'metric' => $count);
@@ -283,6 +331,10 @@ class FWPLimitSizeOfPosts {
 
 	public function syndicated_item_excerpt ($excerpt, $post) {
 		$link = $post->link;
+
+		if ('syndicated_item_content'!=$link->setting($this->name.' apply size limits', $this->name.'_apply_size_limits')) :
+			return $content;
+		endif;
 
 		$rule = $link->setting('limit size of posts', $this->name.'_limit_size_of_posts', NULL);
 		// Rules are stored in the format array('metric' => $count, 'metric' => $count);
@@ -385,11 +437,34 @@ class FWPLimitSizeOfPosts {
 		endif;
 		$selector[] = '<li><label>'.$input['no'].' '.__("Do not limit the size of $thesePosts").'</label></li>';
 		$selector[] = '<li><label>'.$input['yes'].' '.__("Cut off $thesePosts after a certain length").'</label></li>';
-		$selector[] = '<li><label>'.$input['break'].' '.__("Insert a \"Read More...\" break into $thesePosts after a certain length").'</label></li>';
+		$selector[] = '<li><label>'.$input['break'].' '.__("Insert a \"Read More...\" break into $thesePosts after a certain length").'</label><br/>(only works when limits are applied on Import, not on Display)</li>';
 		$selector[] = '</ul>';
+
+		$fasl_options = array(
+			'the_content' => 'when posts are displayed on the website',
+			'syndicated_item_content' => 'when posts are first imported into the database',
+		);
+		$fasl_params = array(
+			'setting-default' => 'default',
+			'global-setting-default' => 'the_content',
+			'labels' => array(
+				'the_content' => __('when posts are displayed'),
+				'syndicated_item_content' => __('when posts are first imported into the database'),
+			),
+			'default-input-value' => 'default',
+		);
 		?>
 		<table class="edit-form narrow">
 		<tbody>
+		<tr>
+		<th scope="row"><?php _e('Apply size limits:'); ?></th>
+		<td><?php
+		$page->setting_radio_control(
+			$this->name . ' apply size limits', $this->name . '_apply_size_limits',
+			$fasl_options, $fasl_params
+		);
+		?></td></tr>
+
 		<tr>
 		<th scope="row"><?php _e('Limit post size:'); ?></th>
 		<td><?php print implode("\n", $selector); ?></td>
@@ -441,6 +516,10 @@ class FWPLimitSizeOfPosts {
 	
 	public function save_settings ($params, $page) {
 		if (isset($params['save']) or isset($params['submit'])) :
+			if (isset($params[$this->name.'_apply_size_limits'])) :
+				$page->update_setting($this->name.' apply size limits', $params[$this->name.'_apply_size_limits']);
+			endif;
+
 			if (isset($params[$this->name.'_limits'])) :
 				$rule = array();
 	
@@ -496,6 +575,9 @@ class SyndicatedPostGenerator {
 			$this->post = $post;
 			$this->link = $post->link;
 		else :
+			// FIXME: This doesn't really work. Could we do something
+			// with FeedWordPressLocalPost? Or should we just throw
+			// an exception, or...?
 			$this->post = new SyndicatedPost($post);
 			$this->link = $this->post->link;
 		endif;
