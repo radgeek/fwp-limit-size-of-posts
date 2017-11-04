@@ -2,19 +2,18 @@
 /*
 Plugin Name: FWP+: Limit size of posts
 Plugin URI: http://projects.radgeek.com/fwp-limit-size-of-posts/
-Description: enables you to limit the size of incoming syndicated posts from FeedWordPress by word count or by character count
-Version: 2011.0506 
+Description: enables you to limit the size of incoming syndicated posts from FeedWordPress by word count, character count, or sentence count.
+Version: 2017.1104 
 Author: Charles Johnson
 Author URI: http://radgeek.com/
 License: GPL
 */
 
 class FWPLimitSizeOfPosts {
-	var $mb;
-	var $myCharset;
+	private $mb;
+	private $myCharset;
 
-	// Careful multibyte support (fallback to normal functions if not available)
-	function FWPLimitSizeOfPosts () {
+	public function __construct () {
 		$this->name = strtolower(get_class($this));
 		$this->myCharset = get_bloginfo('charset');
 		
@@ -25,42 +24,38 @@ class FWPLimitSizeOfPosts {
 
 		add_filter(
 		/*hook=*/ 'syndicated_item_content',
-		/*function=*/ array(&$this, 'syndicated_item_content'),
+		/*function=*/ array($this, 'syndicated_item_content'),
 		/*priority=*/ 10010,
 		/*arguments=*/ 2
 		);
 		
 		add_filter(
 		/*hook=*/ 'syndicated_item_excerpt',
-		/*function=*/ array(&$this, 'syndicated_item_excerpt'),
+		/*function=*/ array($this, 'syndicated_item_excerpt'),
 		/*priority=*/ 10010,
 		/*arguments=*/ 2
 		);
 		
 		add_action(
 		/*hook=*/ 'feedwordpress_admin_page_posts_meta_boxes',
-		/*function=*/ array(&$this, 'add_settings_box'),
+		/*function=*/ array($this, 'add_settings_box'),
 		/*priority=*/ 100,
 		/*arguments=*/ 1
 		);
 		
 		add_action(
 		/*hook=*/ 'feedwordpress_admin_page_posts_save',
-		/*function=*/ array(&$this, 'save_settings'),
+		/*function=*/ array($this, 'save_settings'),
 		/*priority=*/ 100,
 		/*arguments=*/ 2
 		);
 	} /* FWPLimitSizeOfPosts constructor */
-	
-	function __construct () {
-		self::FWPLimitSizeOfPosts();
-	} /* FWPLimitSizeOfPosts::__construct() */
 
-	// Carefully support multibyte languages
-	function is_mb () { return $this->mb; }
-	function charset () { return $this->myCharset; }
+	// Carefully support multibyte languages (fallback to normal functions if not available)
+	protected function is_mb () { return $this->mb; }
+	protected function charset () { return $this->myCharset; }
 	
-	function substr ($str, $start, $length = null) {
+	protected function substr ($str, $start, $length = null) {
 		$length = (is_null($length) ? $this->strlen($str) : $length);
 		$str = ($this->is_mb()
 			? mb_substr($str, $start, $length, $this->charset())
@@ -68,7 +63,7 @@ class FWPLimitSizeOfPosts {
 		return $str;
 	} /* FWPLimitSizeOfPosts::substr() */
 	
-	function strlen ($str) {
+	protected function strlen ($str) {
 		if ($this->is_mb()) :
 			return mb_strlen($str, $this->charset());
 		else :
@@ -76,10 +71,10 @@ class FWPLimitSizeOfPosts {
 		endif;
 	} /* FWPLimitSizeOfPosts::strlen() */
 
-	function filter ($text, $params = array()) {
+	public function filter ($text, $params = array()) {
 		global $id, $post;
 		
-		$arg = shortcode_atts(array(
+		$arg = wp_parse_args($params, array(
 		'sentences' => NULL,
 		'words' => NULL,
 		'characters' => NULL,
@@ -89,7 +84,7 @@ class FWPLimitSizeOfPosts {
 		'finish word' => false,
 		'ellipsis' => NULL,
 		'keep images' => false,
-		), $params);
+		));
 		
 		$sentencesMax = $arg['sentences'];
 		$wordsMax = $arg['words'];
@@ -267,7 +262,7 @@ class FWPLimitSizeOfPosts {
 		return $text;
 	} /* FWPLimitSizeOfPosts::filter() */
 
-	function syndicated_item_content ($content, $post) {
+	public function syndicated_item_content ($content, $post) {
 		$link = $post->link;
 
 		$rule = $link->setting('limit size of posts', $this->name.'_limit_size_of_posts', NULL);
@@ -286,7 +281,7 @@ class FWPLimitSizeOfPosts {
 		return $content;
 	} /* FWPLimitSizeOfPosts::syndicated_item_content() */
 
-	function syndicated_item_excerpt ($excerpt, $post) {
+	public function syndicated_item_excerpt ($excerpt, $post) {
 		$link = $post->link;
 
 		$rule = $link->setting('limit size of posts', $this->name.'_limit_size_of_posts', NULL);
@@ -305,7 +300,7 @@ class FWPLimitSizeOfPosts {
 		return $excerpt;
 	} /* FWPLimitSizeOfPosts::syndicated_item_excerpt() */
 	
-	function add_settings_box ($page) {
+	public function add_settings_box ($page) {
 		add_meta_box(
 			/*id=*/ "feedwordpress_{$this->name}_box",
 			/*title=*/ __("Limit size of posts"),
@@ -315,7 +310,7 @@ class FWPLimitSizeOfPosts {
 		);
 	} /* FWPLimitSizeOfPosts::add_settings_box() */
 
-	function limit_objects () {
+	protected function limit_objects () {
 		return array(
 			'words' => 300 /*=default limit*/,
 			'sentences' => 10 /*=default limit*/,
@@ -325,7 +320,7 @@ class FWPLimitSizeOfPosts {
 		);
 	}
 
-	function display_settings ($page, $box = NULL) {
+	public function display_settings ($page, $box = NULL) {
 		$global_rule = get_option("feedwordpress_{$this->name}_limit_size_of_posts", NULL);
 		if ($page->for_feed_settings()) :
 			$rule = $page->link->setting('limit size of posts', NULL, NULL);
@@ -444,7 +439,7 @@ class FWPLimitSizeOfPosts {
 		<?php
 	} /* FWPLimitSizeOfPosts::display_settings() */
 	
-	function save_settings ($params, $page) {
+	public function save_settings ($params, $page) {
 		if (isset($params['save']) or isset($params['submit'])) :
 			if (isset($params[$this->name.'_limits'])) :
 				$rule = array();
@@ -493,10 +488,10 @@ class FWPLimitSizeOfPosts {
 } /* class FWPLimitSizeOfPosts */
 
 class SyndicatedPostGenerator {
-	var $post;
-	var $link;
+	protected $post;
+	protected $link;
 	
-	function SyndicatedPostGenerator ($post) {
+	public function __construct ($post) {
 		if (is_object($post) and is_a($post, 'SyndicatedPost')) :
 			$this->post = $post;
 			$this->link = $post->link;
@@ -506,7 +501,7 @@ class SyndicatedPostGenerator {
 		endif;
 	} /* SyndicatedPostGenerator constructor */
 	
-	function generated_by ($name, $url, $version = NULL) {
+	public function generated_by ($name, $url, $version = NULL) {
 		$ret = NULL;
 		if (method_exists($this->link, 'generated_by')) :
 			$ret = $this->link->generated_by($name, $url, $version);
@@ -563,8 +558,9 @@ class SyndicatedPostGenerator {
 			endif;
 		endif;
 		return $ret;
-	}
-}
+	} /* SyndicatedPostGenerator::generated_by () */
+} /* class SyndicatedPostGenerator */
 
+global $fwpPostSizeLimiter;
 $fwpPostSizeLimiter = new FWPLimitSizeOfPosts;
 
