@@ -2,8 +2,8 @@
 /*
 Plugin Name: FWP+: Limit size of posts
 Plugin URI: http://projects.radgeek.com/fwp-limit-size-of-posts/
-Description: enables you to limit the size of incoming syndicated posts from FeedWordPress by word count, character count, or sentence count.
-Version: 2017.1104 
+Description: enables you to track and limit the size of incoming syndicated posts from FeedWordPress by word count, character count, or sentence count.
+Version: 2018.0128 
 Author: Charles Johnson
 Author URI: http://radgeek.com/
 License: GPL
@@ -42,10 +42,17 @@ class FWPLimitSizeOfPosts {
 		/*priority=*/ 10010,
 		/*arguments=*/ 2
 		);
-		
+
 		add_filter(
 		/*hook=*/ 'syndicated_item_excerpt',
 		/*function=*/ array($this, 'syndicated_item_excerpt'),
+		/*priority=*/ 10010,
+		/*arguments=*/ 2
+		);
+		
+		add_filter(
+		/*hook=*/ 'syndicated_post',
+		/*function=*/ array($this, 'syndicated_post'),
 		/*priority=*/ 10010,
 		/*arguments=*/ 2
 		);
@@ -352,6 +359,51 @@ class FWPLimitSizeOfPosts {
 		return $excerpt;
 	} /* FWPLimitSizeOfPosts::syndicated_item_excerpt() */
 	
+	public function syndicated_post ($aPost, $oPost) {
+		$aLengths = $this->count_lengths($oPost->content()); // get original HTML content from before filtering, etc.
+		foreach ($aLengths as $units => $measure) :
+			$metaKey = 'fwplsop count '.$units;
+			if (!isset($aPost['meta'][$metaKey]) ):
+				$aPost['meta'][$metaKey] = array();
+			endif;
+			$aPost['meta'][$metaKey][] = $measure;
+		endforeach;
+		return $aPost;
+	} /* FWPLimitSizeOfPosts::syndicated_post() */
+
+	public function count_lengths($text) {
+		$text_bits = preg_split(
+					'/([\s]+|[.?!]+|<[^>]+>)/',
+					$text,
+					-1,
+					PREG_SPLIT_DELIM_CAPTURE
+		);
+
+		$sentencesN = 0;
+		$wordsN = 0;
+		$charsN = 0;
+		$length = 0;
+		foreach ($text_bits as $chunk) :
+			// This is a tag, or whitespace.
+			if (preg_match('/^<[^>]+>$/s', $chunk)) :
+				// Closer tags might break a sentence
+				if (preg_match('!(</p>|</li>)!i', $chunk)) :
+					$sentencesN += 1;
+				endif;
+			elseif (strlen(trim($chunk)) == 0) :
+				$charsN += $this->strlen($chunk);
+			elseif (preg_match('/[.?!]+/', $chunk)) :
+				$charsN += $this->strlen($chunk);
+				$sentencesN += 1;
+			else :
+				$charsN += $this->strlen($chunk);
+				$wordsN += 1;
+			endif;
+		endforeach;
+
+		return array("words" => $wordsN, "characters" => $charsN, "sentences" => $sentencesN);
+	} /* FWPLimitSizeOfPosts::count_lengths() */
+
 	public function add_settings_box ($page) {
 		add_meta_box(
 			/*id=*/ "feedwordpress_{$this->name}_box",
