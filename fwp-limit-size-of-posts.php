@@ -3,7 +3,7 @@
 Plugin Name: FWP+: Limit size of posts
 Plugin URI: http://projects.radgeek.com/fwp-limit-size-of-posts/
 Description: enables you to track and limit the size of incoming syndicated posts from FeedWordPress by word count, character count, or sentence count.
-Version: 2018.0128 
+Version: 2021.0715 
 Author: Charles Johnson
 Author URI: http://radgeek.com/
 License: GPL
@@ -340,7 +340,7 @@ class FWPLimitSizeOfPosts {
 		$link = $post->link;
 
 		if ('syndicated_item_content'!=$link->setting($this->name.' apply size limits', $this->name.'_apply_size_limits')) :
-			return $content;
+			return $excerpt;
 		endif;
 
 		$rule = $link->setting('limit size of posts', $this->name.'_limit_size_of_posts', NULL);
